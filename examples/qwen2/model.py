@@ -888,7 +888,8 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             prompt_vocab_size=prompt_vocab_size,
         )
         if use_cache:
-            hidden_states, presents = hidden_states
+            org_hidden_states, presents = hidden_states
+        hidden_states = org_hidden_states
 
         if self.mapping.is_last_pp_rank():
             hidden_states = gather_last_token_logits(
@@ -898,13 +899,8 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             # [batch_size, hidden_size] -> [batch_size, vocab_size]
             lm_logits = self.lm_head(hidden_states)
 
-            # logit shape: [bs, seq_len, vocab_size]
-            # hidden state shape: [bs, seq_len, hidden_size]
-            if (True):
-                # lm_logits = concat([lm_logits, hidden_states], dim=1)
-                lm_logits = hidden_states
-
             lm_logits.mark_output('logits', self.logits_dtype)
+            org_hidden_states.mark_output('hidden_states_output', self.dtype)
         else:
             hidden_states.mark_output('hidden_states_output', self.dtype)
 
@@ -913,11 +909,11 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
                                   presents):
                 present.mark_output(f'present_key_value_{i}', self.kv_dtype)
             if self.mapping.is_last_pp_rank():
-                return (lm_logits, presents)
+                return (lm_logits, org_hidden_states, presents)
             return (hidden_states, presents)
         else:
             if self.mapping.is_last_pp_rank():
-                return lm_logits
+                return (lm_logits, org_hidden_states)
             return hidden_states
 
     def prepare_inputs(
