@@ -897,6 +897,13 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
 
             # [batch_size, hidden_size] -> [batch_size, vocab_size]
             lm_logits = self.lm_head(hidden_states)
+
+            # logit shape: [bs, seq_len, vocab_size]
+            # hidden state shape: [bs, seq_len, hidden_size]
+            if (True):
+                # lm_logits = concat([lm_logits, hidden_states], dim=1)
+                lm_logits = hidden_states
+
             lm_logits.mark_output('logits', self.logits_dtype)
         else:
             hidden_states.mark_output('hidden_states_output', self.dtype)

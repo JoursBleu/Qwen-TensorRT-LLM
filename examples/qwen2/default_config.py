@@ -3,12 +3,19 @@ import os
 
 class DefaultConfig:
     now_dir = os.path.dirname(os.path.abspath(__file__))
-    hf_model_dir = os.path.join(now_dir, "qwen1.5_7b_chat")
-    tokenizer_dir = os.path.join(now_dir, "qwen1.5_7b_chat")
+    # hf_model_dir = os.path.join(now_dir, "qwen1.5_7b_chat")
+    # tokenizer_dir = os.path.join(now_dir, "qwen1.5_7b_chat")
+    # int4_gptq_model_dir = os.path.join(now_dir, "qwen1.5_7b_chat_int4")
+    # ft_dir_path = os.path.join(now_dir, "c-model", "qwen1.5_7b_chat")
+    # engine_dir = os.path.join(now_dir, "trt_engines", "fp16", "1-gpu")
+    
+    hf_model_dir = '/lpai/volumes/cloudmodel-muses/yuxiaoyang/llava_qwen4b_sft_v4.5_onlyqwen2'
+    tokenizer_dir = '/lpai/volumes/cloudmodel-muses/yuxiaoyang/llava_qwen4b_sft_v4.5_onlyqwen2'
     int4_gptq_model_dir = os.path.join(now_dir, "qwen1.5_7b_chat_int4")
-    ft_dir_path = os.path.join(now_dir, "c-model", "qwen1.5_7b_chat")
-    engine_dir = os.path.join(now_dir, "trt_engines", "fp16", "1-gpu")
-
+    ft_dir_path = '/lpai/volumes/lpai-demo-muses/xiaoyang/trt_engines/llava_qwen4b/smoothquant_models'
+    # engine_dir = '/lpai/volumes/lpai-demo-muses/xiaoyang/trt_engines/llava_qwen4b/trtllm080/smoothquant/trt_engines/lpex_engine'
+    # engine_dir = '/lpai/volumes/lpai-demo-muses/xiaoyang/trt_engines/qwen1.5/4b/trtllm080/int8_weight_only/1gpu'
+    engine_dir = '/lpai/volumes/lpai-demo-muses/xiaoyang/trt_engines/llava_qwen4b/trtllm080_1/int8_weight_only/1gpu'
     # Maximum batch size for HF backend.
     hf_max_batch_size = 1
 
@@ -20,10 +27,10 @@ class DefaultConfig:
     chat_format = "chatml"
 
     # Maximum input length.
-    max_input_len = 1024 * 4
+    max_input_len = 1024 * 2
 
     # Maximum number of generate new tokens.
-    max_new_tokens = 2048
+    max_new_tokens = 512
 
     max_output_len = max_new_tokens
 

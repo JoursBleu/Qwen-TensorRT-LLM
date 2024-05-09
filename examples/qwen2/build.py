@@ -7,6 +7,15 @@ import ctypes
 import torch
 import torch.multiprocessing as mp
 
+# import debugpy
+# try:
+#     # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
+#     debugpy.listen(("localhost", 9501))
+#     print("Waiting for debugger attach")
+#     debugpy.wait_for_client()
+# except Exception as e:
+#     pass
+
 # for release runing
 # from transformers import AutoConfig, AutoModelForCausalLM
 # for debug running (need transformers >= 4.37.1)
@@ -338,7 +347,7 @@ def parse_arguments():
     parser.add_argument(
         "--max_num_tokens",
         type=int,
-        default=None,
+        default=8192,
         help="Define the max number of tokens supported by the engine",
     )
 
@@ -386,11 +395,15 @@ def parse_arguments():
         action="store_true",
         help="Activates latency-optimized algorithm for all-reduce instead of NCCL.",
     )
+    parser.add_argument(
+        "--gather_generation_logits",
+        action="store_true",
+    )
 
     parser.add_argument(
         '--max_prompt_embedding_table_size',
         type=int,
-        default=0,
+        default=2048,
         help='Setting to a value > 0 enables support for prompt tuning.'
     )
 
@@ -786,6 +799,7 @@ def build_rank_engine(
     pretrained_config = PretrainedConfig.from_dict(pretrained_config_dict)
     pretrained_config.set_rank(rank)
     plugin_config = PluginConfig.from_arguments(args)
+    plugin_config = network.plugin_config
     build_config = BuildConfig.from_dict(
         {
             'max_input_len': args.max_input_len,
@@ -795,7 +809,7 @@ def build_rank_engine(
             'max_num_tokens': args.max_num_tokens,
             'max_prompt_embedding_table_size': args.max_prompt_embedding_table_size,
             # 'gather_context_logits': args.gather_context_logits,
-            # 'gather_generation_logits': args.gather_generation_logits,
+            'gather_generation_logits': args.gather_generation_logits,
             'strongly_typed': args.strongly_typed,
             'builder_opt': args.builder_opt,
             # 'profiling_verbosity': args.profiling_verbosity,
@@ -848,6 +862,7 @@ def build(rank, args):
             max_input_len=args.max_input_len,
             max_output_len=args.max_output_len,
             max_num_tokens=args.max_num_tokens,
+            max_multimodel_len=2048,
             int8=int8_trt_flag,
             fp8=args.quant_mode.has_fp8_qdq(),
             quant_mode=args.quant_mode,
