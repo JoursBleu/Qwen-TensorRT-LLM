@@ -987,50 +987,54 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             max_draft_len=max_draft_len,
         )
 
-        num_profiles = len(model_inputs['input_ids'].profiles)
-        max_gen_token_len = self.max_medusa_token_len + 1
-        medusa_mask_len_range = [[0, max_gen_token_len, max_gen_token_len]
-                                 ] * num_profiles
-        medusa_position_len_range = [[0, max_gen_token_len, max_gen_token_len]
+        if hasattr(self,'max_medusa_token_len'):
+            num_profiles = len(model_inputs['input_ids'].profiles)
+            max_gen_token_len = self.max_medusa_token_len + 1
+            medusa_mask_len_range = [[0, max_gen_token_len, max_gen_token_len]
                                      ] * num_profiles
-        # # 32 bits packed mask aligned.
-        num_packed_medusa_masks = (self.max_medusa_token_len + 1 + 32 - 1) // 32
-        packed_medusa_mask_len_range = [[0, 1, num_packed_medusa_masks]
-                                        ] * num_profiles
+            medusa_position_len_range = [[0, max_gen_token_len, max_gen_token_len]
+                                         ] * num_profiles
+            # # 32 bits packed mask aligned.
+            num_packed_medusa_masks = (self.max_medusa_token_len + 1 + 32 - 1) // 32
+            packed_medusa_mask_len_range = [[0, 1, num_packed_medusa_masks]
+                                            ] * num_profiles
 
-        # batch beam range (different sequence may have different medusa offsets or packed masks).
-        bb_range_cxt = GenerationMixin.default_range(max_batch_size)
-        bb_range_gen = GenerationMixin.default_range(max_batch_size * max_beam_width)
-        # enable_two_optimization_profiles
-        if num_profiles == 2:
-            bb_range = [bb_range_cxt, bb_range_gen]
+            # batch beam range (different sequence may have different medusa offsets or packed masks).
+            bb_range_cxt = GenerationMixin.default_range(max_batch_size)
+            bb_range_gen = GenerationMixin.default_range(max_batch_size * max_beam_width)
+            # enable_two_optimization_profiles
+            if num_profiles == 2:
+                bb_range = [bb_range_cxt, bb_range_gen]
+            else:
+                bb_range = [bb_range_gen]
+
+            # medusa position offsets that are fixed during the whole session.
+            # it will be shared among all sequences.
+            medusa_position_offsets = Tensor(
+                name='medusa_position_offsets',
+                dtype=trt.int32,
+                shape=[-1, -1],
+                dim_range=OrderedDict([
+                    ('batch_size_beam_width', bb_range),
+                    ('medusa_position_ids_dim0', medusa_position_len_range),
+                ]),
+            )
+
+            medusa_packed_mask = Tensor(
+                name='medusa_packed_mask',
+                dtype=trt.int32,
+                shape=[-1, -1, -1],
+                dim_range=OrderedDict([
+                    ('batch_size_beam_width', bb_range),
+                    ('medusa_packed_mask_dim0', medusa_mask_len_range),
+                    ('medusa_packed_mask_dim1', packed_medusa_mask_len_range),
+                ]),
+            )
+            model_inputs['medusa_packed_mask'] = medusa_packed_mask
+            model_inputs['medusa_position_offsets'] = medusa_position_offsets
         else:
-            bb_range = [bb_range_gen]
-
-        # medusa position offsets that are fixed during the whole session.
-        # it will be shared among all sequences.
-        medusa_position_offsets = Tensor(
-            name='medusa_position_offsets',
-            dtype=trt.int32,
-            shape=[-1, -1],
-            dim_range=OrderedDict([
-                ('batch_size_beam_width', bb_range),
-                ('medusa_position_ids_dim0', medusa_position_len_range),
-            ]),
-        )
-
-        medusa_packed_mask = Tensor(
-            name='medusa_packed_mask',
-            dtype=trt.int32,
-            shape=[-1, -1, -1],
-            dim_range=OrderedDict([
-                ('batch_size_beam_width', bb_range),
-                ('medusa_packed_mask_dim0', medusa_mask_len_range),
-                ('medusa_packed_mask_dim1', packed_medusa_mask_len_range),
-            ]),
-        )
-        model_inputs['medusa_packed_mask'] = medusa_packed_mask
-        model_inputs['medusa_position_offsets'] = medusa_position_offsets
+            model_inputs['medusa_packed_mask'] = None
+            model_inputs['medusa_position_offsets'] = None
 
         return (model_inputs['input_ids'], model_inputs['position_ids'], True,
                 model_inputs['last_token_ids'],

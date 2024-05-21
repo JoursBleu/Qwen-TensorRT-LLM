@@ -550,9 +550,6 @@ def build_rank_engine(
         },
         'use_parallel_embedding': args.use_parallel_embedding,
         'embedding_sharding_dim': args.embedding_sharding_dim,
-        'max_medusa_token_len': 20,
-        'num_medusa_heads': 20,
-        'num_medusa_layers': 1,
         # 'share_embedding_table': args.use_embedding_sharing,
         'use_prompt_tuning': args.max_prompt_embedding_table_size > 0,
         # 'moe_num_experts': args.moe_num_experts,
@@ -609,6 +606,13 @@ def build_rank_engine(
         use_prompt_tuning=args.max_prompt_embedding_table_size > 0,
         dense_context_fmha=args.dense_context_fmha,
     )
+
+    pretrained_config_dict['max_medusa_token_len'] = tensorrt_llm_qwen.max_medusa_token_len if hasattr(
+                tensorrt_llm_qwen, 'max_medusa_token_len') else 0
+    pretrained_config_dict['num_medusa_heads'] = tensorrt_llm_qwen.num_medusa_heads if hasattr(
+                tensorrt_llm_qwen, 'num_medusa_heads') else 0
+    pretrained_config_dict['num_medusa_layers'] = tensorrt_llm_qwen.num_medusa_layers if hasattr(
+                tensorrt_llm_qwen, 'num_medusa_layers') else 0
 
     if args.use_smooth_quant:
         pretrained_config_dict['quantization']['sq_use_plugin'] = True
