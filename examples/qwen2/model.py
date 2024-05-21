@@ -233,6 +233,8 @@ class QWen2Attention(Module):
             rotary_embedding_base=10000.0,
             rotary_embedding_scaling=None,
             rotary_embedding_percentage=1.0,
+            medusa_packed_mask=None,  # For Medusa support
+            medusa_position_offsets=None,
             tp_group=None,
             tp_size=1,
             tp_rank=0,
@@ -373,6 +375,8 @@ class QWen2Attention(Module):
             use_cache=False,
             kv_cache_params=None,
             attention_params=None,
+            medusa_packed_mask=None,  # For Medusa support
+            medusa_position_offsets=None,
     ):
         if not default_net().plugin_config.gpt_attention_plugin:
             raise ValueError(
@@ -417,6 +421,8 @@ class QWen2Attention(Module):
             host_context_lengths=attention_params.host_context_lengths,
             dense_context_fmha=self.dense_context_fmha,
             use_cache=use_cache,
+            medusa_packed_mask=medusa_packed_mask,  # For Medusa support
+            medusa_position_offsets=medusa_position_offsets,
         )
         context = self.o_proj(context)
         if use_cache:
@@ -580,6 +586,8 @@ class Qwen2DecoderLayer(Module):
             self,
             hidden_states: Tensor,
             # position_embedding,
+            medusa_packed_mask=None,  # For Medusa support
+            medusa_position_offsets=None,
             use_cache=False,
             kv_cache_params=None,
             attention_params=None,
@@ -593,6 +601,8 @@ class Qwen2DecoderLayer(Module):
             use_cache=use_cache,
             kv_cache_params=kv_cache_params,
             attention_params=attention_params,
+            medusa_position_offsets=medusa_position_offsets,  # For Medusa support
+            medusa_packed_mask=medusa_packed_mask,  # For Medusa support
         )
         if use_cache:
             attention_output, presents = attention_output
@@ -715,7 +725,9 @@ class QWen2Model(Module):
             hidden_states=None,
             prompt_embedding_table=None,
             prompt_tasks=None,
-            prompt_vocab_size=None
+            prompt_vocab_size=None,
+            medusa_position_offsets=None,  # For Medusa support
+            medusa_packed_mask=None,  # For Medusa support
     ):
 
         if kv_cache_params.past_key_value is None:
@@ -729,9 +741,10 @@ class QWen2Model(Module):
             hidden_states = self.embed_tokens(input_ids, position_ids,
                                            prompt_embedding_table, prompt_tasks,
                                            prompt_vocab_size)
+            # hidden_states = hidden_states
         else:
             hidden_states = recv(hidden_states, self.mapping.prev_pp_rank())
-        self.register_network_output(f"embd", hidden_states)
+        # self.register_network_output(f"embd", hidden_states)
 
         for layer, past, pointer, host_pointer, max_attention_window_size in zip(
                 self.layers,
@@ -751,6 +764,8 @@ class QWen2Model(Module):
                     kv_cache_block_pointers=[pointer],
                     host_kv_cache_block_pointers=[host_pointer],
                     cache_indirection=kv_cache_params.cache_indirection),
+                medusa_position_offsets=medusa_position_offsets,  # For Medusa support
+                medusa_packed_mask=medusa_packed_mask,  # For Medusa support
                 attention_params=attention_params,
             )
 
@@ -854,14 +869,17 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             custom_plugin_paths=custom_plugin_paths
         )
         vocab_size_padded = pad_vocab_size(vocab_size, mapping.tp_size)
-        if self.mapping.is_last_pp_rank():
-            self.lm_head = ColumnLinear(hidden_size,
-                                        vocab_size_padded,
-                                        bias=False,
-                                        dtype=dtype,
-                                        tp_group=mapping.tp_group,
-                                        tp_size=mapping.tp_size,
-                                        gather_output=True)
+        # if self.mapping.is_last_pp_rank():
+            # self.lm_head = ColumnLinear(hidden_size,
+                                        # vocab_size_padded,
+                                        # bias=False,
+                                        # dtype=dtype,
+                                        # tp_group=mapping.tp_group,
+                                        # tp_size=mapping.tp_size,
+                                        # gather_output=True)
+        self.max_medusa_token_len = 20
+        self.num_medusa_heads = 20
+        self.num_medusa_layers = 1
 
     def forward(
             self,
@@ -874,7 +892,9 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             hidden_states=None,
             prompt_embedding_table=None,
             prompt_tasks=None,
-            prompt_vocab_size=None
+            prompt_vocab_size=None,
+            medusa_packed_mask=None,
+            medusa_position_offsets=None,
     ):
         hidden_states = super().forward(
             input_ids,
@@ -886,21 +906,23 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             prompt_embedding_table=prompt_embedding_table,
             prompt_tasks=prompt_tasks,
             prompt_vocab_size=prompt_vocab_size,
+            medusa_packed_mask=medusa_packed_mask,
+            medusa_position_offsets=medusa_position_offsets,
         )
         if use_cache:
-            org_hidden_states, presents = hidden_states
-        hidden_states = org_hidden_states
+            hidden_states, presents = hidden_states
+        # hidden_states = org_hidden_states
 
         if self.mapping.is_last_pp_rank():
-            hidden_states = gather_last_token_logits(
-                hidden_states, last_token_ids,
-                default_net().plugin_config.remove_input_padding)
+            # hidden_states = gather_last_token_logits(
+                # hidden_states, last_token_ids,
+                # default_net().plugin_config.remove_input_padding)
 
-            # [batch_size, hidden_size] -> [batch_size, vocab_size]
-            lm_logits = self.lm_head(hidden_states)
+            # # [batch_size, hidden_size] -> [batch_size, vocab_size]
+            # lm_logits = self.lm_head(hidden_states)
 
-            lm_logits.mark_output('logits', self.logits_dtype)
-            org_hidden_states.mark_output('hidden_states_output', self.dtype)
+            # lm_logits.mark_output('logits', self.logits_dtype)
+            hidden_states.mark_output('hidden_states_output', self.dtype)
         else:
             hidden_states.mark_output('hidden_states_output', self.dtype)
 
@@ -909,11 +931,11 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
                                   presents):
                 present.mark_output(f'present_key_value_{i}', self.kv_dtype)
             if self.mapping.is_last_pp_rank():
-                return (lm_logits, org_hidden_states, presents)
+                return (hidden_states, presents)
             return (hidden_states, presents)
         else:
             if self.mapping.is_last_pp_rank():
-                return (lm_logits, org_hidden_states)
+                return (hidden_states)
             return hidden_states
 
     def prepare_inputs(
@@ -925,6 +947,7 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             max_beam_width: int = 1,
             max_num_tokens: int = None,
             prompt_embedding_table_size=256,
+            max_draft_len=None,
     ):
         '''@brief: Prepare inputs Tensors for the model, the given sizes are used to determine the
             ranges of the dimensions of when using TRT dynamic shapes.
@@ -961,7 +984,53 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
             mapping=self.mapping,
             max_num_tokens=max_num_tokens,
             prompt_embedding_table_size=prompt_embedding_table_size,
+            max_draft_len=max_draft_len,
         )
+
+        num_profiles = len(model_inputs['input_ids'].profiles)
+        max_gen_token_len = self.max_medusa_token_len + 1
+        medusa_mask_len_range = [[0, max_gen_token_len, max_gen_token_len]
+                                 ] * num_profiles
+        medusa_position_len_range = [[0, max_gen_token_len, max_gen_token_len]
+                                     ] * num_profiles
+        # # 32 bits packed mask aligned.
+        num_packed_medusa_masks = (self.max_medusa_token_len + 1 + 32 - 1) // 32
+        packed_medusa_mask_len_range = [[0, 1, num_packed_medusa_masks]
+                                        ] * num_profiles
+
+        # batch beam range (different sequence may have different medusa offsets or packed masks).
+        bb_range_cxt = GenerationMixin.default_range(max_batch_size)
+        bb_range_gen = GenerationMixin.default_range(max_batch_size * max_beam_width)
+        # enable_two_optimization_profiles
+        if num_profiles == 2:
+            bb_range = [bb_range_cxt, bb_range_gen]
+        else:
+            bb_range = [bb_range_gen]
+
+        # medusa position offsets that are fixed during the whole session.
+        # it will be shared among all sequences.
+        medusa_position_offsets = Tensor(
+            name='medusa_position_offsets',
+            dtype=trt.int32,
+            shape=[-1, -1],
+            dim_range=OrderedDict([
+                ('batch_size_beam_width', bb_range),
+                ('medusa_position_ids_dim0', medusa_position_len_range),
+            ]),
+        )
+
+        medusa_packed_mask = Tensor(
+            name='medusa_packed_mask',
+            dtype=trt.int32,
+            shape=[-1, -1, -1],
+            dim_range=OrderedDict([
+                ('batch_size_beam_width', bb_range),
+                ('medusa_packed_mask_dim0', medusa_mask_len_range),
+                ('medusa_packed_mask_dim1', packed_medusa_mask_len_range),
+            ]),
+        )
+        model_inputs['medusa_packed_mask'] = medusa_packed_mask
+        model_inputs['medusa_position_offsets'] = medusa_position_offsets
 
         return (model_inputs['input_ids'], model_inputs['position_ids'], True,
                 model_inputs['last_token_ids'],
@@ -987,4 +1056,6 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
                 model_inputs['hidden_states_input'],
                 model_inputs['prompt_embedding_table'],
                 model_inputs['tasks'],
-                model_inputs['prompt_vocab_size'])
+                model_inputs['prompt_vocab_size'],
+                model_inputs['medusa_packed_mask'],
+                model_inputs['medusa_position_offsets'],)

@@ -403,7 +403,7 @@ def parse_arguments():
     parser.add_argument(
         '--max_prompt_embedding_table_size',
         type=int,
-        default=2048,
+        default=8192,
         help='Setting to a value > 0 enables support for prompt tuning.'
     )
 
@@ -550,8 +550,11 @@ def build_rank_engine(
         },
         'use_parallel_embedding': args.use_parallel_embedding,
         'embedding_sharding_dim': args.embedding_sharding_dim,
+        'max_medusa_token_len': 20,
+        'num_medusa_heads': 20,
+        'num_medusa_layers': 1,
         # 'share_embedding_table': args.use_embedding_sharing,
-        # 'use_prompt_tuning': args.use_prompt_tuning,
+        'use_prompt_tuning': args.max_prompt_embedding_table_size > 0,
         # 'moe_num_experts': args.moe_num_experts,
         # 'moe_top_k': args.moe_top_k,
         # 'moe_tp_mode': args.moe_tp_mode,
@@ -768,6 +771,14 @@ def build_rank_engine(
 
     if args.paged_kv_cache:
         network.plugin_config.enable_paged_kv_cache(args.tokens_per_block)
+    # network.plugin_config.enable_paged_kv_cache(args.tokens_per_block)
+    network.plugin_config.set_bert_attention_plugin()
+    network.plugin_config.set_context_fmha()
+    network.plugin_config.set_gemm_plugin()
+    network.plugin_config.enable_xqa_optimization()
+    # network.plugin_config.set_paged_context_fmha()
+    # network.plugin_config.set_context_fmha_for_generation()
+    # network.plugin_config.enable_mmha_multi_block_mode()
 
     with net_guard(network):
         # Prepare
@@ -782,7 +793,10 @@ def build_rank_engine(
             max_beam_width=args.max_beam_width,
             max_num_tokens=args.max_num_tokens,
             prompt_embedding_table_size=args.max_prompt_embedding_table_size,
+            max_draft_len=tensorrt_llm_qwen.max_medusa_token_len if hasattr(
+                tensorrt_llm_qwen, 'max_medusa_token_len') else 0,
         )
+        print(inputs)
         tensorrt_llm_qwen(*inputs)
         if args.enable_debug_output:
             # mark intermediate nodes' outputs
@@ -795,6 +809,7 @@ def build_rank_engine(
             model_path = os.path.join(args.output_dir, "test.onnx")
             to_onnx(network.trt_network, model_path)
 
+    # network.speculative_decoding_mode = "draft_tokens_external"
     # Network -> Engine
     pretrained_config = PretrainedConfig.from_dict(pretrained_config_dict)
     pretrained_config.set_rank(rank)
@@ -814,6 +829,12 @@ def build_rank_engine(
             'builder_opt': args.builder_opt,
             # 'profiling_verbosity': args.profiling_verbosity,
             'enable_debug_output': args.enable_debug_output,
+            'max_medusa_token_len': tensorrt_llm_qwen.max_medusa_token_len if hasattr(
+                tensorrt_llm_qwen, 'max_medusa_token_len') else 0,
+            'num_medusa_heads': tensorrt_llm_qwen.num_medusa_heads if hasattr(
+                tensorrt_llm_qwen, 'num_medusa_heads') else 0,
+            'num_medusa_layers': tensorrt_llm_qwen.num_medusa_layers if hasattr(
+                tensorrt_llm_qwen, 'num_medusa_layers') else 0,
         },
         plugin_config=plugin_config
     )

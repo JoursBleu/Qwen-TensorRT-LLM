@@ -17,10 +17,10 @@ class DefaultConfig:
     # engine_dir = '/lpai/volumes/lpai-demo-muses/xiaoyang/trt_engines/qwen1.5/4b/trtllm080/int8_weight_only/1gpu'
     engine_dir = '/lpai/volumes/lpai-demo-muses/xiaoyang/trt_engines/llava_qwen4b/trtllm080_1/int8_weight_only/1gpu'
     # Maximum batch size for HF backend.
-    hf_max_batch_size = 1
+    hf_max_batch_size = 16
 
     # Maximum batch size for TRT-LLM backend.
-    trt_max_batch_size = 1
+    trt_max_batch_size = 16
 
     # choice the model format, base or chat
     #  choices=["chatml", "raw"],
@@ -30,7 +30,7 @@ class DefaultConfig:
     max_input_len = 1024 * 2
 
     # Maximum number of generate new tokens.
-    max_new_tokens = 512
+    max_new_tokens = 512 * trt_max_batch_size
 
     max_output_len = max_new_tokens
 

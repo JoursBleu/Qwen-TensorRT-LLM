@@ -516,7 +516,7 @@ def load_from_hf_qwen(
     use_weight_only = quant_mode.is_weight_only()
 
     model_params = dict(hf_qwen.named_parameters())
-    model_params["lm_head.weight"] = hf_qwen.lm_head.weight
+    # model_params["lm_head.weight"] = hf_qwen.lm_head.weight
     torch_dtype = str_dtype_to_torch(dtype)
     # set for rope embedding
     # inv_freq = 1.0 / (rotary_base ** (
@@ -542,10 +542,10 @@ def load_from_hf_qwen(
             tensorrt_llm_qwen.embed_tokens.vocab_embedding.weight.value = v
         elif "model.norm.weight" in k:
             tensorrt_llm_qwen.norm.weight.value = v
-        elif "lm_head.weight" in k:
-            tensorrt_llm_qwen.lm_head.weight.value = np.ascontiguousarray(
-                split(v, mapping.tp_size, mapping.rank)
-            )
+        # elif "lm_head.weight" in k:
+            # tensorrt_llm_qwen.lm_head.weight.value = np.ascontiguousarray(
+                # split(v, mapping.tp_size, mapping.rank)
+            # )
         else:
             layer_idx = extract_layer_idx(k)
             if layer_idx is None:
