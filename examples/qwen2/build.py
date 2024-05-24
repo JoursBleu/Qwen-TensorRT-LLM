@@ -606,13 +606,10 @@ def build_rank_engine(
         use_prompt_tuning=args.max_prompt_embedding_table_size > 0,
         dense_context_fmha=args.dense_context_fmha,
     )
-
-    pretrained_config_dict['max_medusa_token_len'] = tensorrt_llm_qwen.max_medusa_token_len if hasattr(
-                tensorrt_llm_qwen, 'max_medusa_token_len') else 0
-    pretrained_config_dict['num_medusa_heads'] = tensorrt_llm_qwen.num_medusa_heads if hasattr(
-                tensorrt_llm_qwen, 'num_medusa_heads') else 0
-    pretrained_config_dict['num_medusa_layers'] = tensorrt_llm_qwen.num_medusa_layers if hasattr(
-                tensorrt_llm_qwen, 'num_medusa_layers') else 0
+    if hasattr(tensorrt_llm_qwen, 'max_medusa_token_len'):
+        pretrained_config_dict['max_medusa_token_len'] = tensorrt_llm_qwen.max_medusa_token_len
+        pretrained_config_dict['num_medusa_heads'] = tensorrt_llm_qwen.num_medusa_heads
+        pretrained_config_dict['num_medusa_layers'] = tensorrt_llm_qwen.num_medusa_layers
 
     if args.use_smooth_quant:
         pretrained_config_dict['quantization']['sq_use_plugin'] = True
@@ -775,11 +772,12 @@ def build_rank_engine(
 
     if args.paged_kv_cache:
         network.plugin_config.enable_paged_kv_cache(args.tokens_per_block)
-    # network.plugin_config.enable_paged_kv_cache(args.tokens_per_block)
     network.plugin_config.set_bert_attention_plugin()
-    network.plugin_config.set_context_fmha()
     network.plugin_config.set_gemm_plugin()
+
     network.plugin_config.enable_xqa_optimization()
+    network.plugin_config.set_context_fmha()
+    # network.plugin_config.enable_paged_kv_cache(args.tokens_per_block)
     # network.plugin_config.set_paged_context_fmha()
     # network.plugin_config.set_context_fmha_for_generation()
     # network.plugin_config.enable_mmha_multi_block_mode()

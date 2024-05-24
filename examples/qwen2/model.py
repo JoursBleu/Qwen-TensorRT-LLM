@@ -877,8 +877,8 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
                                         # tp_group=mapping.tp_group,
                                         # tp_size=mapping.tp_size,
                                         # gather_output=True)
-        self.max_medusa_token_len = 20
-        self.num_medusa_heads = 20
+        self.max_medusa_token_len = 40
+        self.num_medusa_heads = 40
         self.num_medusa_layers = 1
 
     def forward(
