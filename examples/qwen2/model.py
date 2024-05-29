@@ -800,7 +800,7 @@ class Qwen2ForCausalLM(QWen2Model, GenerationMixin):
                  logits_dtype="float32",
                  mlp_hidden_size=None,
                  position_embedding_type=PositionEmbeddingType.rope_gpt_neox,
-                 rotary_base=10000.0,
+                 rotary_base=1000000.0,
                  rotary_scaling=None,
                  mapping=Mapping(),
                  quant_mode=QuantMode(0),
